@@ -112,16 +112,23 @@ def main():
         feature_dimensions=sc2_env.Dimensions(screen=16, minimap=16))
     # temp solution - sc2_env.Agent(sc2_env.Race.terran) might be too restricting
     # We need this change because sc2 now requires specifying players.
+
+
     with sc2_env.SC2Env(
         map_name="Simple64",
-        players = [sc2_env.Agent(race=sc2_env.Race.terran), sc2_env.Agent(race=sc2_env.Race.terran)],
-        #players=[sc2_env.Agent(sc2_env.Race.terran),sc2_env.Agent(sc2_env.Race.terran)],
+        #players = [sc2_env.Agent(race=sc2_env.Race.terran), sc2_env.Agent(race=sc2_env.Race.terran)],
+        players = [sc2_env.Agent(), sc2_env.RandomAgent()],
+
         step_mul=step_mul,
         visualize=True,
         agent_interface_format=AGENT_INTERFACE_FORMAT) as env:
 
       model = cnn_to_mlp(
           convs=[(16, 8, 4), (32, 4, 2)], hiddens=[256], dueling=True)
+
+
+      #agent = random_agent.RandomAgent()
+      #run_loop.run_loop([agent], env, steps)
 
       acts = deepq_nexus_wars.learn(
           env,
@@ -141,9 +148,6 @@ def main():
 
       acts[0].save("mineral_shards_x.pkl")
       acts[1].save("mineral_shards_y.pkl")
-
-      agent = random_agent.RandomAgent()
-      run_loop.run_loop([agent], env, steps)
 
   elif FLAGS.algorithm == "deepq-4way":
 

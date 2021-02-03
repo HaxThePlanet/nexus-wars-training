@@ -10,6 +10,8 @@ import tensorflow as tf
 import zipfile
 import six
 import time
+import numpy
+from pysc2.agents import random_agent
 
 from absl import flags
 
@@ -113,7 +115,7 @@ flags.DEFINE_bool("human", False, "Whether to host a game as a human.")
 
 FLAGS = flags.FLAGS
 
-class ActWrapper(object):
+class ActWrapper(base_agent.BaseAgent):
   def __init__(self, act):
     self._act = act
     #self._act_params = act_params
@@ -366,168 +368,192 @@ def learn(env,
   update_target_x()
   update_target_y()
 
+  #time.sleep(30)  # Stagger startups, otherwise tshey seem to conflict somehow
+
   episode_rewards = [0.0]
   saved_mean_reward = None
 
   obs = env.reset()
 
-  # Select all marines first
-  # obs = env.step(actions=[sc2_actions.FunctionCall(_MAKE_ZELOT, [_NO_OP])])
-  #
-  # player_relative = obs[0].observation["feature_screen"][_PLAYER_RELATIVE]
-  #
-  # screen = (player_relative == _PLAYER_NEUTRAL).astype(int) #+ path_memory
-  #
-  # player_y, player_x = (player_relative == _PLAYER_FRIENDLY).nonzero()
-  # player = [int(player_x.mean()), int(player_y.mean())]
-  #
-  # reset = True
-  # with tempfile.TemporaryDirectory() as td:
-  #   model_saved = False
-  #   model_file = os.path.join("model/", "nexus_wars")
-  #   print(model_file)
-  #
-  #   for t in range(max_timesteps):
-  #     if callback is not None:
-  #       if callback(locals(), globals()):
-  #         break
-  #     # Take action and update exploration to the newest value
-  #     kwargs = {}
-  #     if not param_noise:
-  #       update_eps = exploration.value(t)
-  #       update_param_noise_threshold = 0.
-  #     else:
-  #       update_eps = 0.
-  #       if param_noise_threshold >= 0.:
-  #         update_param_noise_threshold = param_noise_threshold
-  #       else:
-  #         # Compute the threshold such that the KL divergence between perturbed and non-perturbed
-  #         # policy is comparable to eps-greedy exploration with eps = exploration.value(t).
-  #         # See Appendix C.1 in Parameter Space Noise for Exploration, Plappert et al., 2017
-  #         # for detailed explanation.
-  #         update_param_noise_threshold = -np.log(1. - exploration.value(t) + exploration.value(t) / float(num_actions))
-  #       kwargs['reset'] = reset
-  #       kwargs['update_param_noise_threshold'] = update_param_noise_threshold
-  #       kwargs['update_param_noise_scale'] = True
-  #
-  #     action_x = act_x(np.expand_dims(np.array(screen)[None], axis=0), update_eps=update_eps, **kwargs)[0]
-  #
-  #     action_y = act_y(np.expand_dims(np.array(screen)[None], axis=0), update_eps=update_eps, **kwargs)[0]
-  #
-  #     reset = False
-  #
-  #     coord = [player[0], player[1]]
-  #     rew = 0
-  #
-  #     coord = [action_x, action_y]
-  #
-  #
-  #     if _MOVE_SCREEN not in obs[0].observation["available_actions"]:
-  #       obs = env.step(actions=[sc2_actions.FunctionCall(_SELECT_ARMY, [_SELECT_ALL])])
-  #
-  #     new_action = [sc2_actions.FunctionCall(_MOVE_SCREEN, [_NOT_QUEUED, coord])]
-  #
-  #     # else:
-  #     #   new_action = [sc2_actions.FunctionCall(_NO_OP, [])]
-  #
-  #     obs = env.step(actions=new_action)
-  #
-  #     player_relative = obs[0].observation["feature_screen"][_PLAYER_RELATIVE]
-  #     new_screen = (player_relative == _PLAYER_NEUTRAL).astype(int)
-  #
-  #     player_y, player_x = (player_relative == _PLAYER_FRIENDLY).nonzero()
-  #     # resolve the cannot convert float NaN to integer issue
-  #     if len(player_x) == 0:
-  #       player_x = np.array([0])
-  #     if len(player_y) == 0:
-  #       player_y = np.array([0])
-  #     player = [int(player_x.mean()), int(player_y.mean())]
-  #
-  #     rew = obs[0].reward
-  #
-  #     done = obs[0].step_type == environment.StepType.LAST
-  #
-  #     # Store transition in the replay buffer.
-  #     replay_buffer_x.add(screen, action_x, rew, new_screen, float(done))
-  #     replay_buffer_y.add(screen, action_y, rew, new_screen, float(done))
-  #
-  #     screen = new_screen
-  #
-  #     episode_rewards[-1] += rew
-  #     reward = episode_rewards[-1]
-  #
-  #     if done:
-  #       obs = env.reset()
-  #       player_relative = obs[0].observation["feature_screen"][_PLAYER_RELATIVE]
-  #       screent = (player_relative == _PLAYER_NEUTRAL).astype(int)
-  #
-  #       player_y, player_x = (player_relative == _PLAYER_FRIENDLY).nonzero()
-  #       player = [int(player_x.mean()), int(player_y.mean())]
-  #
-  #       # Select all marines first
-  #       env.step(actions=[sc2_actions.FunctionCall(_SELECT_ARMY, [_SELECT_ALL])])
-  #       episode_rewards.append(0.0)
-  #       #episode_minerals.append(0.0)
-  #
-  #       reset = True
-  #
-  #     if t > learning_starts and t % train_freq == 0:
-  #       # Minimize the error in Bellman's equation on a batch sampled from replay buffer.
-  #       if prioritized_replay:
-  #
-  #         experience_x = replay_buffer_x.sample(batch_size, beta=beta_schedule_x.value(t))
-  #         (obses_t_x, actions_x, rewards_x, obses_tp1_x, dones_x, weights_x, batch_idxes_x) = experience_x
-  #
-  #         experience_y = replay_buffer_y.sample(batch_size, beta=beta_schedule_y.value(t))
-  #         (obses_t_y, actions_y, rewards_y, obses_tp1_y, dones_y, weights_y, batch_idxes_y) = experience_y
-  #       else:
-  #
-  #         obses_t_x, actions_x, rewards_x, obses_tp1_x, dones_x = replay_buffer_x.sample(batch_size)
-  #         weights_x, batch_idxes_x = np.ones_like(rewards_x), None
-  #
-  #         obses_t_y, actions_y, rewards_y, obses_tp1_y, dones_y = replay_buffer_y.sample(batch_size)
-  #         weights_y, batch_idxes_y = np.ones_like(rewards_y), None
-  #
-  #       td_errors_x = train_x(np.expand_dims(obses_t_x, axis=1), actions_x, rewards_x, np.expand_dims(obses_tp1_x, axis=1), dones_x, weights_x)
-  #
-  #       td_errors_y = train_x(np.expand_dims(obses_t_y, axis=1), actions_y, rewards_y, np.expand_dims(obses_tp1_y, axis=1), dones_y, weights_y)
-  #
-  #
-  #       if prioritized_replay:
-  #         new_priorities_x = np.abs(td_errors_x) + prioritized_replay_eps
-  #         new_priorities_y = np.abs(td_errors_y) + prioritized_replay_eps
-  #         replay_buffer_x.update_priorities(batch_idxes_x, new_priorities_x)
-  #         replay_buffer_y.update_priorities(batch_idxes_y, new_priorities_y)
-  #
-  #
-  #     if t > learning_starts and t % target_network_update_freq == 0:
-  #       # Update target network periodically.
-  #       update_target_x()
-  #       update_target_y()
-  #
-  #     mean_100ep_reward = round(np.mean(episode_rewards[-101:-1]), 1)
-  #     num_episodes = len(episode_rewards)
-  #     if done and print_freq is not None and len(episode_rewards) % print_freq == 0:
-  #       logger.record_tabular("steps", t)
-  #       logger.record_tabular("episodes", num_episodes)
-  #       logger.record_tabular("reward", reward)
-  #       logger.record_tabular("mean 100 episode reward", mean_100ep_reward)
-  #       logger.record_tabular("% time spent exploring", int(100 * exploration.value(t)))
-  #       logger.dump_tabular()
-  #
-  #     if (checkpoint_freq is not None and t > learning_starts and
-  #             num_episodes > 100 and t % checkpoint_freq == 0):
-  #       if saved_mean_reward is None or mean_100ep_reward > saved_mean_reward:
-  #         if print_freq is not None:
-  #           logger.log("Saving model due to mean reward increase: {} -> {}".format(
-  #             saved_mean_reward, mean_100ep_reward))
-  #         U.save_state(model_file)
-  #         model_saved = True
-  #         saved_mean_reward = mean_100ep_reward
-  #   if model_saved:
-  #     if print_freq is not None:
-  #       logger.log("Restored model with mean reward: {}".format(saved_mean_reward))
-  #     U.load_state(model_file)
+  action_blacklist = ['0']
+
+  #function_id = numpy.random.choice(obs[0].observation.available_actions)
+
+  #step forward a noop so units and prob appear
+  obs = env.step(actions=[sc2_actions.FunctionCall(_NO_OP, [])])
+
+  player_relative = obs[0].observation["feature_screen"][_PLAYER_RELATIVE]
+
+  screen = (player_relative == _PLAYER_NEUTRAL).astype(int) #+ path_memory
+
+  player_y, player_x = (player_relative == _PLAYER_FRIENDLY).nonzero()
+  player = [0, 0]
+
+  reset = True
+
+  with tempfile.TemporaryDirectory() as td:
+    model_saved = False
+    model_file = os.path.join("model/", "nexus_wars")
+    print(model_file)
+
+    for t in range(max_timesteps):
+      if callback is not None:
+        if callback(locals(), globals()):
+          break
+      # Take action and update exploration to the newest value
+      kwargs = {}
+      if not param_noise:
+        update_eps = exploration.value(t)
+        update_param_noise_threshold = 0.
+      else:
+        update_eps = 0.
+        if param_noise_threshold >= 0.:
+          update_param_noise_threshold = param_noise_threshold
+        else:
+          # Compute the threshold such that the KL divergence between perturbed and non-perturbed
+          # policy is comparable to eps-greedy exploration with eps = exploration.value(t).
+          # See Appendix C.1 in Parameter Space Noise for Exploration, Plappert et al., 2017
+          # for detailed explanation.
+          update_param_noise_threshold = -np.log(1. - exploration.value(t) + exploration.value(t) / float(num_actions))
+        kwargs['reset'] = reset
+        kwargs['update_param_noise_threshold'] = update_param_noise_threshold
+        kwargs['update_param_noise_scale'] = True
+
+      action_x = act_x(np.expand_dims(np.array(screen)[None], axis=0), update_eps=update_eps, **kwargs)[0]
+      action_y = act_y(np.expand_dims(np.array(screen)[None], axis=0), update_eps=update_eps, **kwargs)[0]
+
+      reset = False
+
+      coord = [player[0], player[1]]
+      rew = 0
+
+      coord = [action_x, action_y]
+
+
+      #available_actions_now = numpy.random.choice(obs[0].observation.available_actions)
+      available_actions_now = len(obs[0].observation.available_actions)
+
+      spec = env.action_spec()[0]
+
+      #function_id = numpy.random.choice(obs[0].observation.available_actions)
+      args = [[numpy.random.randint(0, size) for size in arg.sizes]
+        for arg in spec.functions[41].args]
+
+      #ready for actions yet? 4 actions = nothing to do yet
+      if available_actions_now > 5:
+        #step random action
+        new_action = numpy.random.choice(obs[0].observation.available_actions)
+        #actions = [sc2_actions.FunctionCall(function_id, [args])]
+
+        #actions = [sc2_actions.FunctionCall(41, args)]
+
+        #try:
+        #obs = env.step(actions)
+        #obs = env.step(actions)
+        obs = env.step(actions=[sc2_actions.FunctionCall(_NO_OP, [])])
+         # print("good action step: " + actions)
+        #except:
+#          pass
+      else:
+        #step no matter wat
+        obs = env.step(actions=[sc2_actions.FunctionCall(_NO_OP, [])])
+
+      player_relative = obs[0].observation["feature_screen"][_PLAYER_RELATIVE]
+      new_screen = (player_relative == _PLAYER_NEUTRAL).astype(int)
+
+      player_y, player_x = (player_relative == _PLAYER_FRIENDLY).nonzero()
+      # resolve the cannot convert float NaN to integer issue
+      if len(player_x) == 0:
+        player_x = np.array([0])
+      if len(player_y) == 0:
+        player_y = np.array([0])
+      player = [int(player_x.mean()), int(player_y.mean())]
+
+      rew = obs[0].reward
+
+      done = obs[0].step_type == environment.StepType.LAST
+
+      # Store transition in the replay buffer.
+      replay_buffer_x.add(screen, action_x, rew, new_screen, float(done))
+      replay_buffer_y.add(screen, action_y, rew, new_screen, float(done))
+
+      screen = new_screen
+
+      episode_rewards[-1] += rew
+      reward = episode_rewards[-1]
+
+      if done:
+        obs = env.reset()
+        player_relative = obs[0].observation["feature_screen"][_PLAYER_RELATIVE]
+        screent = (player_relative == _PLAYER_NEUTRAL).astype(int)
+
+        player_y, player_x = (player_relative == _PLAYER_FRIENDLY).nonzero()
+        player = [int(player_x.mean()), int(player_y.mean())]
+
+        # Select all marines first
+        env.step(actions=[sc2_actions.FunctionCall(_SELECT_ARMY, [_SELECT_ALL])])
+        episode_rewards.append(0.0)
+        #episode_minerals.append(0.0)
+
+        reset = True
+
+      if t > learning_starts and t % train_freq == 0:
+        # Minimize the error in Bellman's equation on a batch sampled from replay buffer.
+        if prioritized_replay:
+
+          experience_x = replay_buffer_x.sample(batch_size, beta=beta_schedule_x.value(t))
+          (obses_t_x, actions_x, rewards_x, obses_tp1_x, dones_x, weights_x, batch_idxes_x) = experience_x
+
+          experience_y = replay_buffer_y.sample(batch_size, beta=beta_schedule_y.value(t))
+          (obses_t_y, actions_y, rewards_y, obses_tp1_y, dones_y, weights_y, batch_idxes_y) = experience_y
+        else:
+
+          obses_t_x, actions_x, rewards_x, obses_tp1_x, dones_x = replay_buffer_x.sample(batch_size)
+          weights_x, batch_idxes_x = np.ones_like(rewards_x), None
+
+          obses_t_y, actions_y, rewards_y, obses_tp1_y, dones_y = replay_buffer_y.sample(batch_size)
+          weights_y, batch_idxes_y = np.ones_like(rewards_y), None
+
+        td_errors_x = train_x(np.expand_dims(obses_t_x, axis=1), actions_x, rewards_x, np.expand_dims(obses_tp1_x, axis=1), dones_x, weights_x)
+
+        td_errors_y = train_x(np.expand_dims(obses_t_y, axis=1), actions_y, rewards_y, np.expand_dims(obses_tp1_y, axis=1), dones_y, weights_y)
+
+
+        if prioritized_replay:
+          new_priorities_x = np.abs(td_errors_x) + prioritized_replay_eps
+          new_priorities_y = np.abs(td_errors_y) + prioritized_replay_eps
+          replay_buffer_x.update_priorities(batch_idxes_x, new_priorities_x)
+          replay_buffer_y.update_priorities(batch_idxes_y, new_priorities_y)
+
+
+      if t > learning_starts and t % target_network_update_freq == 0:
+        # Update target network periodically.
+        update_target_x()
+        update_target_y()
+
+      mean_100ep_reward = round(np.mean(episode_rewards[-101:-1]), 1)
+      num_episodes = len(episode_rewards)
+      if done and print_freq is not None and len(episode_rewards) % print_freq == 0:
+        logger.record_tabular("steps", t)
+        logger.record_tabular("episodes", num_episodes)
+        logger.record_tabular("reward", reward)
+        logger.record_tabular("mean 100 episode reward", mean_100ep_reward)
+        logger.record_tabular("% time spent exploring", int(100 * exploration.value(t)))
+        logger.dump_tabular()
+
+      if (checkpoint_freq is not None and t > learning_starts and
+              num_episodes > 100 and t % checkpoint_freq == 0):
+        if saved_mean_reward is None or mean_100ep_reward > saved_mean_reward:
+          if print_freq is not None:
+            logger.log("Saving model due to mean reward increase: {} -> {}".format(
+              saved_mean_reward, mean_100ep_reward))
+          U.save_state(model_file)
+          model_saved = True
+          saved_mean_reward = mean_100ep_reward
+    if model_saved:
+      if print_freq is not None:
+        logger.log("Restored model with mean reward: {}".format(saved_mean_reward))
+      U.load_state(model_file)
 
   return ActWrapper(act_x), ActWrapper(act_y)
 
