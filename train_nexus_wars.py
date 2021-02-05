@@ -116,7 +116,9 @@ def main():
 
     with sc2_env.SC2Env(
         map_name="Simple64",
-        players = [sc2_env.Agent(race=sc2_env.Race.terran), sc2_env.Agent(race=sc2_env.Race.terran)],
+        players = [sc2_env.Agent(race=sc2_env.Race.random,name="player1"), sc2_env.Bot([sc2_env.Race.zerg, sc2_env.Race.protoss, sc2_env.Race.terran],
+                                                                                          sc2_env.Difficulty.very_hard,
+                                                                                          [sc2_env.BotBuild.rush, sc2_env.BotBuild.timing])],
         #players = [sc2_env.Agent(), sc2_env.RandomAgent()],
 
         step_mul=step_mul,
@@ -127,8 +129,8 @@ def main():
           convs=[(16, 8, 4), (32, 4, 2)], hiddens=[256], dueling=True)
 
 
-      agent = random_agent.RandomAgent()
-      run_loop.run_loop([agent], env, steps)
+      #agent = random_agent.RandomAgent()
+      #run_loop.run_loop([agent], env, steps)
 
       acts = deepq_nexus_wars.learn(
           env,

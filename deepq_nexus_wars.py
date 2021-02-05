@@ -346,8 +346,8 @@ def learn(env,
     if prioritized_replay_beta_iters is None:
       prioritized_replay_beta_iters = max_timesteps
     beta_schedule_x = LinearSchedule(prioritized_replay_beta_iters,
-                                   initial_p=prioritized_replay_beta0,
-                                   final_p=1.0)
+                                     initial_p=prioritized_replay_beta0,
+                                     final_p=1.0)
 
     beta_schedule_y = LinearSchedule(prioritized_replay_beta_iters,
                                      initial_p=prioritized_replay_beta0,
@@ -429,31 +429,24 @@ def learn(env,
 
       coord = [action_x, action_y]
 
+      observation_spec = env.observation_spec()
+      action_spec = env.action_spec()
 
-      #available_actions_now = numpy.random.choice(obs[0].observation.available_actions)
-      available_actions_now = len(obs[0].observation.available_actions)
 
-      spec = env.action_spec()[0]
-
-      #function_id = numpy.random.choice(obs[0].observation.available_actions)
-      args = [[numpy.random.randint(0, size) for size in arg.sizes]
-        for arg in spec.functions[41].args]
+      #get available actions
+      avail_actions_now = obs[0].observation.available_actions
 
       #ready for actions yet? 4 actions = nothing to do yet
-      if available_actions_now > 5:
-        #step random action
-        new_action = numpy.random.choice(obs[0].observation.available_actions)
-        #actions = [sc2_actions.FunctionCall(function_id, [args])]
+      if len(avail_actions_now) > 5:
+        #game state is ready for random action commands, get them and args
+        function_id = numpy.random.choice(obs[0].observation.available_actions)
+        args = [[numpy.random.randint(0, size) for size in arg.sizes]
+                 for arg in action_spec[0].functions[function_id].args]
 
-        #actions = [sc2_actions.FunctionCall(41, args)]
+        #issue random command and arg
+        obs = env.step(actions=[sc2_actions.FunctionCall(function_id, args)])
 
-        #try:
-        #obs = env.step(actions)
-        #obs = env.step(actions)
-        obs = env.step(actions=[sc2_actions.FunctionCall(_NO_OP, [])])
-         # print("good action step: " + actions)
-        #except:
-#          pass
+        #obs = env.step(actions=[sc2_actions.FunctionCall(_NO_OP, [])])
       else:
         #step no matter wat
         obs = env.step(actions=[sc2_actions.FunctionCall(_NO_OP, [])])
@@ -482,20 +475,20 @@ def learn(env,
       episode_rewards[-1] += rew
       reward = episode_rewards[-1]
 
-      if done:
-        obs = env.reset()
-        player_relative = obs[0].observation["feature_screen"][_PLAYER_RELATIVE]
-        screent = (player_relative == _PLAYER_NEUTRAL).astype(int)
-
-        player_y, player_x = (player_relative == _PLAYER_FRIENDLY).nonzero()
-        player = [int(player_x.mean()), int(player_y.mean())]
-
-        # Select all marines first
-        env.step(actions=[sc2_actions.FunctionCall(_SELECT_ARMY, [_SELECT_ALL])])
-        episode_rewards.append(0.0)
-        #episode_minerals.append(0.0)
-
-        reset = True
+      # if done:
+      #   obs = env.reset()
+      #   player_relative = obs[0].observation["feature_screen"][_PLAYER_RELATIVE]
+      #   screent = (player_relative == _PLAYER_NEUTRAL).astype(int)
+      #
+      #   player_y, player_x = (player_relative == _PLAYER_FRIENDLY).nonzero()
+      #   player = [int(player_x.mean()), int(player_y.mean())]
+      #
+      #   # Select all marines first
+      #   env.step(actions=[sc2_actions.FunctionCall(_SELECT_ARMY, [_SELECT_ALL])])
+      #   episode_rewards.append(0.0)
+      #   #episode_minerals.append(0.0)
+      #
+      #   reset = True
 
       if t > learning_starts and t % train_freq == 0:
         # Minimize the error in Bellman's equation on a batch sampled from replay buffer.
