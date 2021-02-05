@@ -463,7 +463,6 @@ def learn(env,
       player = [int(player_x.mean()), int(player_y.mean())]
 
       rew = obs[0].reward
-
       done = obs[0].step_type == environment.StepType.LAST
 
       # Store transition in the replay buffer.
@@ -475,20 +474,20 @@ def learn(env,
       episode_rewards[-1] += rew
       reward = episode_rewards[-1]
 
-      # if done:
-      #   obs = env.reset()
-      #   player_relative = obs[0].observation["feature_screen"][_PLAYER_RELATIVE]
-      #   screent = (player_relative == _PLAYER_NEUTRAL).astype(int)
-      #
-      #   player_y, player_x = (player_relative == _PLAYER_FRIENDLY).nonzero()
-      #   player = [int(player_x.mean()), int(player_y.mean())]
-      #
-      #   # Select all marines first
-      #   env.step(actions=[sc2_actions.FunctionCall(_SELECT_ARMY, [_SELECT_ALL])])
-      #   episode_rewards.append(0.0)
-      #   #episode_minerals.append(0.0)
-      #
-      #   reset = True
+      if done:
+        obs = env.reset()
+        player_relative = obs[0].observation["feature_screen"][_PLAYER_RELATIVE]
+        screent = (player_relative == _PLAYER_NEUTRAL).astype(int)
+
+        player_y, player_x = (player_relative == _PLAYER_FRIENDLY).nonzero()
+        player = [int(player_x.mean()), int(player_y.mean())]
+
+        # Select all marines first
+        env.step(actions=[sc2_actions.FunctionCall(_SELECT_ARMY, [_SELECT_ALL])])
+        episode_rewards.append(0.0)
+        #episode_minerals.append(0.0)
+
+        reset = True
 
       if t > learning_starts and t % train_freq == 0:
         # Minimize the error in Bellman's equation on a batch sampled from replay buffer.
